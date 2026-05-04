@@ -57,6 +57,54 @@ cp -r "$SCRIPT_DIR/hooks/templates/" "$CLAUDE_DIR/hooks/"
 echo "   • Installing integration manager..."
 cp "$SCRIPT_DIR/integration_manager.py" "$CLAUDE_DIR/hooks/"
 
+# Update Claude Code settings with UserPromptExpansion hook
+echo "   • Updating Claude Code settings with UserPromptExpansion hook..."
+SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+
+# Check if UserPromptExpansion hook already exists
+if grep -q '"UserPromptExpansion"' "$SETTINGS_FILE" 2>/dev/null; then
+    echo "   ✓ UserPromptExpansion hook already configured"
+else
+    # Use Python to properly update the JSON
+    wrapper_path="$CLAUDE_DIR/hooks/enhance_prompt_wrapper.sh"
+    python3 << PYEOF "$SETTINGS_FILE" "$wrapper_path"
+import json
+import sys
+
+settings_path = sys.argv[1]
+wrapper_path = sys.argv[2]
+
+with open(settings_path, 'r') as f:
+    settings = json.load(f)
+
+# Ensure hooks object exists
+if 'hooks' not in settings:
+    settings['hooks'] = {}
+
+# Add UserPromptExpansion hook if not present
+if 'UserPromptExpansion' not in settings['hooks']:
+    settings['hooks']['UserPromptExpansion'] = [{
+        "matcher": "",
+        "hooks": [{
+            "type": "command",
+            "command": f"/bin/bash {wrapper_path}",
+            "timeout": 5
+        }]
+    }]
+
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+
+print("UserPromptExpansion hook added successfully")
+PYEOF
+
+    if [ $? -eq 0 ]; then
+        echo "   ✓ UserPromptExpansion hook configured"
+    else
+        echo "   ⚠️  Could not update settings (manual config required)"
+    fi
+fi
+
 # Clean up old duplicate files
 if [ -f "$CLAUDE_DIR/hooks/enhance-prompt.py" ]; then
     echo "   • Removing old duplicate file..."
